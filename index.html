@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Moodboard Generator</title>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AI Moodboard Generator</h1>
+            <p>Transform your creative script into a stunning visual moodboard</p>
+        </div>
+
+        <div class="main-content">
+            <!-- Input Section -->
+            <div class="input-section">
+                <h2>Your Script</h2>
+                <label for="scriptInput">Enter your creative script or description:</label>
+                <textarea 
+                    id="scriptInput" 
+                    placeholder="Example: A serene morning in a Japanese garden with cherry blossoms, warm sunlight, flowing water, and peaceful atmosphere..."
+                ></textarea>
+
+                <div class="settings">
+                    <label for="imageCount">Number of Images:</label>
+                    <input type="number" id="imageCount" min="1" max="12" value="6">
+                    
+                    <!-- <label for="apiKey">Unsplash API Key (Optional):</label>
+                    <input type="password" id="apiKey" placeholder="Leave empty to use demo key">
+                    
+                    <label for="geminiKey">Gemini API Key:</label>
+                    <input type="password" id="geminiKey" placeholder="Enter Gemini API key"> -->
+                    </div>
+
+                <div class="button-group">
+                    <button class="btn-generate" id="generateBtn">Generate Moodboard</button>
+                    <button class="btn-clear" id="clearBtn">Clear All</button>
+                </div>
+
+                <div id="message"></div>
+            </div>
+
+            <!-- Moodboard Section -->
+            <div class="moodboard-section">
+                <h2>Your Moodboard</h2>
+                <div class="moodboard" id="moodboard">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">✨</div>
+                        <p>Your moodboard will appear here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./script.js"></script>
+</body>
+</html>
