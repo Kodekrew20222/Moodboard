@@ -5,10 +5,23 @@ const API_URL = '/.netlify/functions/generate';
 const scriptInput = document.getElementById('scriptInput');
 const imageCountInput = document.getElementById('imageCount');
 const generateBtn = document.getElementById('generateBtn');
+const clearBtn = document.getElementById('clearBtn');
 const moodboard = document.getElementById('moodboard');
 const messageDiv = document.getElementById('message');
 
 generateBtn.addEventListener('click', generateMoodboard);
+
+// Clear button (keeps your UI same)
+clearBtn.addEventListener('click', () => {
+    scriptInput.value = '';
+    moodboard.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-state-icon">✨</div>
+            <p>Your moodboard will appear here</p>
+        </div>
+    `;
+    messageDiv.innerHTML = '';
+});
 
 // ================= MAIN =================
 async function generateMoodboard() {
@@ -16,6 +29,8 @@ async function generateMoodboard() {
     const count = parseInt(imageCountInput.value) || 6;
 
     if (!script) return showError('Please enter a script');
+
+    console.log("📤 Sending:", { script, count });
 
     generateBtn.disabled = true;
     showLoading();
@@ -27,15 +42,20 @@ async function generateMoodboard() {
             body: JSON.stringify({ script, count })
         });
 
-        if (!res.ok) throw new Error("Server error");
+        console.log("📥 Status:", res.status);
 
         const data = await res.json();
+        console.log("📦 Response:", data);
+
+        if (!res.ok) {
+            throw new Error(data.error || "Server error");
+        }
 
         displayMoodboard(data.images);
         showSuccess(`Generated ${data.images.length} frames ✨`);
 
     } catch (err) {
-        console.error(err);
+        console.error("❌ Frontend Error:", err);
         showError(err.message);
     } finally {
         generateBtn.disabled = false;
@@ -45,7 +65,10 @@ async function generateMoodboard() {
 // ================= UI =================
 function displayMoodboard(images) {
     moodboard.innerHTML = '';
-    if (!images || images.length === 0) return showError("No images found.");
+
+    if (!images || images.length === 0) {
+        return showError("No images found.");
+    }
 
     images.forEach((img, index) => {
         const div = document.createElement('div');

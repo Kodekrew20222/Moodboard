@@ -1,33 +1,31 @@
 exports.handler = async (event) => {
+    console.log("🚀 Function started");
+
     try {
         const { script, count } = JSON.parse(event.body);
+        console.log("📩 Input:", script, count);
 
         const GEMINI_KEY = process.env.GEMINI_API_KEY;
         const UNSPLASH_KEY = process.env.UNSPLASH_API_KEY;
 
-        if (!script) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: "Script required" })
-            };
+        if (!GEMINI_KEY || !UNSPLASH_KEY) {
+            throw new Error("Missing API keys");
         }
 
         // ================= GEMINI =================
         const prompt = `
-        Act as a storyboard artist. Analyze this script and identify exactly ${count} key visual moments.
-        For each moment, create a 3-4 word "Search Query".
+        Act as a storyboard artist.
+        Extract exactly ${count} visual search queries.
 
         Rules:
-        - ONLY concrete nouns
-        - NO abstract words
-        - Output EXACTLY ${count} items
+        - Only concrete nouns
+        - 3-4 words max
+        - No abstract terms
 
         Script: "${script}"
 
         Return JSON:
-        {
-          "frames": [{ "query": "text" }]
-        }
+        { "frames": [{ "query": "text" }] }
         `;
 
         const geminiRes = await fetch(
@@ -41,12 +39,26 @@ exports.handler = async (event) => {
             }
         );
 
+        console.log("🤖 Gemini status:", geminiRes.status);
+
         const geminiData = await geminiRes.json();
+        console.log("🤖 Gemini raw:", JSON.stringify(geminiData));
 
         let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
-        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        const frames = JSON.parse(text).frames;
+        if (!text) throw new Error("Empty Gemini response");
+
+        let frames = [];
+
+        try {
+            text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            frames = JSON.parse(text).frames;
+        } catch (e) {
+            console.error("❌ JSON Parse Error:", text);
+            throw new Error("Failed to parse Gemini output");
+        }
+
+        console.log("🧠 Frames:", frames);
 
         // ================= UNSPLASH =================
         const images = [];
@@ -59,19 +71,24 @@ exports.handler = async (event) => {
                     `https://api.unsplash.com/photos/random?query=${encodeURIComponent(q)}&orientation=landscape&client_id=${UNSPLASH_KEY}`
                 );
 
+                console.log(`📸 Unsplash (${q}):`, res.status);
+
                 const data = await res.json();
 
-                if (data.urls) {
+                if (data && data.urls) {
                     images.push({
                         url: data.urls.regular,
                         alt: q,
                         description: q
                     });
                 }
-            } catch (e) {}
 
-            await new Promise(r => setTimeout(r, 200));
+            } catch (err) {
+                console.error("❌ Unsplash error:", err);
+            }
         }
+
+        console.log("✅ Images fetched:", images.length);
 
         return {
             statusCode: 200,
@@ -79,9 +96,13 @@ exports.handler = async (event) => {
         };
 
     } catch (err) {
+        console.error("🔥 FUNCTION ERROR:", err);
+
         return {
             statusCode: 500,
-            body: JSON.stringify({ error: err.message })
+            body: JSON.stringify({
+                error: err.message
+            })
         };
     }
 };
