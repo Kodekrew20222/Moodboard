@@ -21,6 +21,7 @@ exports.handler = async (event) => {
         - Only concrete nouns
         - 3-4 words max
         - No abstract terms
+        - STRICT JSON ONLY (no explanation, no markdown)
 
         Script: "${script}"
 
@@ -44,9 +45,20 @@ exports.handler = async (event) => {
         const geminiData = await geminiRes.json();
         console.log("🤖 Gemini raw:", JSON.stringify(geminiData));
 
-        let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+        let text = null;
 
-        if (!text) throw new Error("Empty Gemini response");
+        if (geminiData.candidates && geminiData.candidates.length > 0) {
+            const parts = geminiData.candidates[0].content.parts;
+
+            if (parts && parts.length > 0) {
+                text = parts.map(p => p.text || '').join('');
+            }
+        }
+
+        if (!text) {
+            console.error("❌ FULL GEMINI RESPONSE:", JSON.stringify(geminiData, null, 2));
+            throw new Error("Empty Gemini response");
+        }
 
         let frames = [];
 
@@ -55,7 +67,13 @@ exports.handler = async (event) => {
             frames = JSON.parse(text).frames;
         } catch (e) {
             console.error("❌ JSON Parse Error:", text);
-            throw new Error("Failed to parse Gemini output");
+
+            // fallback: extract queries manually
+            frames = text
+                .split("\n")
+                .filter(line => line.trim().length > 0)
+                .slice(0, count)
+                .map(q => ({ query: q.trim() }));
         }
 
         console.log("🧠 Frames:", frames);
