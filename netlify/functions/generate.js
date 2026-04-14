@@ -14,28 +14,29 @@ exports.handler = async (event) => {
 
         // ================= GEMINI =================
         const prompt = `
-        Act as a storyboard artist.
-        Extract exactly ${count} visual search queries.
+Act as a storyboard artist.
 
-        Rules:
-        - Only concrete nouns
-        - 3-4 words max
-        - No abstract terms
-        - STRICT JSON ONLY (no explanation, no markdown)
+Extract exactly ${count} visual search queries.
 
-        Script: "${script}"
+Rules:
+- Only concrete visual nouns
+- 2-4 words per query
+- No abstract concepts
+- STRICT JSON ONLY
 
-        Return JSON:
-        { "frames": [{ "query": "text" }] }
-        `;
+Script: "${script}"
+
+Return:
+{"frames":[{"query":"text"}]}
+`; 
 
         const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview?key=${GEMINI_KEY}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }]
+                    contents: [{ parts: [{ text: prompt }] }],
                 })
             }
         );
@@ -43,32 +44,40 @@ exports.handler = async (event) => {
         console.log("🤖 Gemini status:", geminiRes.status);
 
         const geminiData = await geminiRes.json();
-        console.log("🤖 Gemini raw:", JSON.stringify(geminiData));
+        console.log("🧪 FULL GEMINI RESPONSE:", JSON.stringify(geminiData, null, 2));
 
-        let text = null;
+        // HANDLE API ERROR FIRST
+        if (geminiData.error) {
+            throw new Error(geminiData.error.message || "Gemini API error");
+        }
+
+        // SAFE TEXT EXTRACTION
+        let text = "";
 
         if (geminiData.candidates && geminiData.candidates.length > 0) {
-            const parts = geminiData.candidates[0].content.parts;
+            const parts = geminiData.candidates[0].content?.parts || [];
 
-            if (parts && parts.length > 0) {
-                text = parts.map(p => p.text || '').join('');
+            for (const p of parts) {
+                if (p.text) text += p.text;
             }
         }
 
-        if (!text) {
-            console.error("❌ FULL GEMINI RESPONSE:", JSON.stringify(geminiData, null, 2));
-            throw new Error("Empty Gemini response");
+        // ❌ IF STILL EMPTY → FAIL WITH DEBUG
+        if (!text || text.trim() === "") {
+            throw new Error("Empty Gemini response (no text returned)");
         }
+
+        // ✅ CLEAN RESPONSE
+        text = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
         let frames = [];
 
         try {
-            text = text.replace(/```json/g, '').replace(/```/g, '').trim();
             frames = JSON.parse(text).frames;
         } catch (e) {
-            console.error("❌ JSON Parse Error:", text);
+            console.error("❌ JSON Parse Failed. Raw text:", text);
 
-            // fallback: extract queries manually
+            // ✅ FALLBACK (VERY IMPORTANT)
             frames = text
                 .split("\n")
                 .filter(line => line.trim().length > 0)
