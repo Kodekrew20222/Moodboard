@@ -44,8 +44,17 @@ async function generateMoodboard() {
 
         console.log("📥 Status:", res.status);
 
-        const data = await res.json();
-        console.log("📦 Response:", data);
+        // ✅ SAFE RESPONSE PARSE
+        let data;
+        try {
+            const text = await res.text();
+            console.log("📦 RAW RESPONSE:", text);
+            data = JSON.parse(text);
+        } catch (e) {
+            throw new Error("Invalid JSON from server");
+        }
+
+        console.log("📦 Parsed:", data);
 
         if (!res.ok) {
             throw new Error(data.error || "Server error");

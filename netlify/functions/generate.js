@@ -1,17 +1,33 @@
 exports.handler = async (event) => {
     console.log("🚀 Function started");
 
+    // ✅ METHOD CHECK
+    if (event.httpMethod !== "POST") {
+        return response(405, { error: "Method not allowed" });
+    }
+
+    // ✅ SAFE BODY PARSE
+    let body;
     try {
-        const { script, count } = JSON.parse(event.body);
-        console.log("📩 Input:", script, count);
+        body = event.body ? JSON.parse(event.body) : {};
+    } catch (e) {
+        console.error("❌ Body parse error:", event.body);
+        return response(400, { error: "Invalid JSON body" });
+    }
 
-        const GEMINI_KEY = process.env.GEMINI_API_KEY;
-        const UNSPLASH_KEY = process.env.UNSPLASH_API_KEY;
+    console.log("📩 Parsed Body:", body);
 
-        if (!GEMINI_KEY || !UNSPLASH_KEY) {
-            throw new Error("Missing API keys");
-        }
+    const script = body.script;
+    const count = body.count || 6;
 
+    if (!script) {
+        return response(400, { error: "Script required" });
+    }
+
+    const GEMINI_KEY = process.env.GEMINI_API_KEY;
+    const UNSPLASH_KEY = process.env.UNSPLASH_API_KEY;
+
+    try {
         // ================= GEMINI =================
         const prompt = `
 Act as a storyboard artist.
@@ -31,58 +47,40 @@ Return:
 `; 
 
         const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview?key=${GEMINI_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
+                    contents: [{ parts: [{ text: prompt }] }]
                 })
             }
         );
 
-        console.log("🤖 Gemini status:", geminiRes.status);
-
         const geminiData = await geminiRes.json();
-        console.log("🧪 FULL GEMINI RESPONSE:", JSON.stringify(geminiData, null, 2));
+        console.log("🤖 Gemini:", JSON.stringify(geminiData));
 
-        // HANDLE API ERROR FIRST
-        if (geminiData.error) {
-            throw new Error(geminiData.error.message || "Gemini API error");
-        }
-
-        // SAFE TEXT EXTRACTION
         let text = "";
 
-        if (geminiData.candidates && geminiData.candidates.length > 0) {
-            const parts = geminiData.candidates[0].content?.parts || [];
-
-            for (const p of parts) {
+        if (geminiData.candidates?.length) {
+            const parts = geminiData.candidates[0].content.parts;
+            parts.forEach(p => {
                 if (p.text) text += p.text;
-            }
+            });
         }
 
-        // ❌ IF STILL EMPTY → FAIL WITH DEBUG
-        if (!text || text.trim() === "") {
-            throw new Error("Empty Gemini response (no text returned)");
+        if (!text) {
+            throw new Error("Empty Gemini response");
         }
 
-        // ✅ CLEAN RESPONSE
-        text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        text = text.replace(/```json|```/g, '').trim();
 
-        let frames = [];
-
+        let frames;
         try {
             frames = JSON.parse(text).frames;
-        } catch (e) {
-            console.error("❌ JSON Parse Failed. Raw text:", text);
-
-            // ✅ FALLBACK (VERY IMPORTANT)
-            frames = text
-                .split("\n")
-                .filter(line => line.trim().length > 0)
-                .slice(0, count)
-                .map(q => ({ query: q.trim() }));
+        } catch {
+            console.log("⚠️ Fallback parsing");
+            frames = text.split("\n").map(q => ({ query: q }));
         }
 
         console.log("🧠 Frames:", frames);
@@ -90,46 +88,35 @@ Return:
         // ================= UNSPLASH =================
         const images = [];
 
-        for (let i = 0; i < frames.length; i++) {
-            const q = frames[i].query;
+        for (let f of frames) {
+            const res = await fetch(
+                `https://api.unsplash.com/photos/random?query=${f.query}&client_id=${UNSPLASH_KEY}`
+            );
 
-            try {
-                const res = await fetch(
-                    `https://api.unsplash.com/photos/random?query=${encodeURIComponent(q)}&orientation=landscape&client_id=${UNSPLASH_KEY}`
-                );
+            const data = await res.json();
 
-                console.log(`📸 Unsplash (${q}):`, res.status);
-
-                const data = await res.json();
-
-                if (data && data.urls) {
-                    images.push({
-                        url: data.urls.regular,
-                        alt: q,
-                        description: q
-                    });
-                }
-
-            } catch (err) {
-                console.error("❌ Unsplash error:", err);
+            if (data.urls) {
+                images.push({
+                    url: data.urls.regular
+                });
             }
         }
 
-        console.log("✅ Images fetched:", images.length);
+        console.log("✅ Images:", images.length);
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ images })
-        };
+        return response(200, { images });
 
     } catch (err) {
-        console.error("🔥 FUNCTION ERROR:", err);
-
-        return {
-            statusCode: 500,
-            body: JSON.stringify({
-                error: err.message
-            })
-        };
+        console.error("🔥 ERROR:", err);
+        return response(500, { error: err.message });
     }
 };
+
+// ✅ HELPER RESPONSE
+function response(status, data) {
+    return {
+        statusCode: status,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    };
+}
