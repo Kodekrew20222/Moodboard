@@ -47,7 +47,7 @@ Return:
 `; 
 
         const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -90,7 +90,7 @@ Return:
 
         for (let f of frames) {
             const res = await fetch(
-                `https://api.unsplash.com/photos/random?query=${f.query}&client_id=${UNSPLASH_KEY}`
+                `https://api.unsplash.com/photos/random?query=${encodeURIComponent(f.query)}&client_id=${UNSPLASH_KEY}`
             );
 
             const data = await res.json();
